@@ -997,42 +997,53 @@
       localStorage.setItem('incalake_preferred_language', currentLang);
     }
 
-    function detectLanguage() {
-      // CORREGIDO: Lógica de detección de idioma con fallback mejorado
-      const urlParams = new URLSearchParams(window.location.search);
-      const langFromUrl = urlParams.get('lang');
+function detectLanguage() {
+  // 1. PRIORIDAD: Parámetro ?lang= en la URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const langFromUrl = urlParams.get('lang');
+  
+  if (langFromUrl && translations[langFromUrl]) {
+    currentLang = langFromUrl;
+    return;
+  }
 
-      if (langFromUrl && translations[langFromUrl]) {
-        currentLang = langFromUrl;
-        return;
-      }
-
-      const pathSegments = window.location.pathname.split('/').filter(segment => segment.length > 0);
-      const languageSegments = ['es', 'en'];
-
-      for (let i = 0; i < pathSegments.length; i++) {
-        const segment = pathSegments[i].toLowerCase();
-        if (languageSegments.includes(segment)) {
-          currentLang = segment;
-          return;
-        }
-      }
-
-      // Verificar idioma guardado en localStorage
-      const savedLang = localStorage.getItem('incalake_preferred_language');
-      if (savedLang && translations[savedLang]) {
-        currentLang = savedLang;
-        return;
-      }
-
-      // Detectar por el navegador - CORREGIDO: Por defecto inglés
-      const userLang = navigator.language || navigator.userLanguage;
-      if (userLang.startsWith('es')) {
-        currentLang = 'es';
-      } else {
-        currentLang = 'en'; // Por defecto inglés para idiomas no reconocidos
-      }
+  // 2. PRIORIDAD: Primer segmento después del dominio
+  // Ejemplos: 
+  // https://incalake.com/es/puno/... → 'es'
+  // https://incalake.com/en/puno/... → 'en'
+  // https://incalake.com/fr/puno/... → no válido, usa inglés por defecto
+  const pathSegments = window.location.pathname.split('/').filter(segment => segment.length > 0);
+  
+  if (pathSegments.length > 0) {
+    const firstSegment = pathSegments[0].toLowerCase();
+    
+    // Solo acepta 'es' o 'en' como idiomas válidos
+    if (firstSegment === 'es') {
+      currentLang = 'es';
+      return;
+    } else if (firstSegment === 'en') {
+      currentLang = 'en';
+      return;
     }
+  }
+
+  // 3. PRIORIDAD: Idioma guardado previamente en localStorage
+  const savedLang = localStorage.getItem('incalake_preferred_language');
+  if (savedLang && translations[savedLang]) {
+    currentLang = savedLang;
+    return;
+  }
+
+  // 4. PRIORIDAD: Detectar por configuración del navegador
+  const userLang = navigator.language || navigator.userLanguage;
+  
+  if (userLang.startsWith('es')) {
+    currentLang = 'es';
+  } else {
+    // 5. FALLBACK: Por defecto inglés para cualquier otro idioma
+    currentLang = 'en';
+  }
+}
 
     // === FUNCIONES DEL CHAT ===
     function toggleWidget() {
@@ -1629,3 +1640,4 @@
     </body>
 
     </html>
+
