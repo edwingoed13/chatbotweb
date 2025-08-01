@@ -1,0 +1,1629 @@
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>IncaLake Chatbot Widget</title>
+        <style>
+/* === ESTILOS BASE DEL WIDGET === */
+* {
+    box-sizing: border-box;
+}
+
+#incalake-widget {
+    position: fixed;
+    z-index: 9999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* === BOTÓN FLOTANTE === */
+.widget-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #0D8EE3, #0B7BC7);
+    border-radius: 50%;
+    box-shadow: 0 4px 20px rgba(13, 142, 227, 0.4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    transition: all 0.3s ease;
+    z-index: 10001;
+}
+
+.widget-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 25px rgba(13, 142, 227, 0.5);
+}
+
+.widget-button svg {
+    width: 28px;
+    height: 28px;
+    fill: white;
+    transition: transform 0.3s ease;
+}
+
+.widget-button.open svg {
+    transform: rotate(180deg);
+}
+
+/* === VENTANA DEL CHAT === */
+.widget-container {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: min(380px, calc(100vw - 40px)); /* Se adapta al ancho de la pantalla */
+    height: min(600px, calc(100vh - 120px)); /* Se adapta a la altura de la pantalla */
+    max-width: 420px; /* Límite máximo */
+    max-height: 700px; /* Límite máximo */
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 10000;
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.widget-container.show {
+    display: flex;
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+/* === HEADER === */
+.widget-header {
+    background: linear-gradient(135deg, #0D8EE3, #0B7BC7);
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0; /* Evita que se comprima */
+}
+
+.header-info {
+    flex: 1;
+    min-width: 0; /* Permite que el contenido se ajuste */
+}
+
+.widget-header h3 {
+    margin: 0;
+    font-size: clamp(14px, 3vw, 16px); /* Fuente adaptable */
+    font-weight: 600;
+}
+
+.widget-header .subtitle {
+    font-size: clamp(10px, 2.5vw, 12px);
+    opacity: 0.9;
+    margin-top: 2px;
+}
+
+.contact-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.contact-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: white;
+    text-decoration: none;
+    font-size: clamp(9px, 2vw, 11px);
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.contact-link:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    text-decoration: none;
+}
+
+.contact-link svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: clamp(50px, 4vw, 24px);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+    min-width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* === FORMULARIO DE BIENVENIDA === */
+.welcome-form {
+    padding: clamp(20px, 4vw, 30px) 20px;
+    text-align: center;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow-y: auto;
+}
+
+.welcome-form h4 {
+    color: #333;
+    margin-bottom: 8px;
+    font-size: clamp(16px, 3.5vw, 18px);
+    font-weight: 600;
+}
+
+.welcome-form p {
+    color: #666;
+    margin-bottom: 20px;
+    font-size: clamp(13px, 2.8vw, 14px);
+    line-height: 1.4;
+}
+
+.form-group {
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #333;
+    font-size: clamp(12px, 2.5vw, 13px);
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: clamp(13px, 2.8vw, 14px);
+    transition: border-color 0.2s;
+    min-height: 44px; /* Tamaño mínimo para touch */
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #0D8EE3;
+}
+
+.phone-group {
+    display: flex;
+    gap: 8px;
+}
+
+.phone-group select {
+    width: min(120px, 35%);
+    flex-shrink: 0;
+}
+
+.phone-group input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* === CAPTCHA === */
+.captcha-group {
+    background: #f8f9fa;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.captcha-question {
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 8px;
+    font-size: clamp(13px, 2.8vw, 14px);
+}
+
+.captcha-input {
+    width: min(80px, 25%) !important;
+    text-align: center;
+    font-size: clamp(14px, 3vw, 16px);
+    font-weight: bold;
+}
+
+.start-btn {
+    width: 100%;
+    padding: 12px;
+    min-height: 44px;
+    background: linear-gradient(135deg, #0D8EE3, #0B7BC7);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: clamp(13px, 2.8vw, 14px);
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.start-btn:hover {
+    transform: translateY(-2px);
+}
+
+.start-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* === ÁREA DEL CHAT === */
+.chat-area {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0; /* Permite que se comprima */
+}
+
+.chat-area.active {
+    display: flex;
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Permite scroll cuando es necesario */
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 2px;
+}
+
+/* === MENSAJES === */
+.message-row {
+    display: flex;
+    margin-bottom: 12px;
+    align-items: flex-start;
+}
+
+.message-row.user {
+    justify-content: flex-end;
+}
+
+.message-row.bot {
+    justify-content: flex-start;
+}
+
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.message-row.user .avatar {
+    order: 2;
+    margin-right: 0;
+    margin-left: 8px;
+}
+
+.message-content {
+    max-width: min(80%, 280px); /* Limita el ancho máximo */
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: clamp(13px, 2.8vw, 14px);
+    line-height: 1.4;
+    word-wrap: break-word;
+    word-break: break-word; /* Mejora el ajuste de texto */
+}
+
+.message-row.user .message-content {
+    background: linear-gradient(135deg, #0D8EE3, #0B7BC7);
+    color: white;
+}
+
+.message-row.bot .message-content {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.message-content a {
+    color: #0D8EE3;
+    text-decoration: underline;
+}
+
+.message-content a::after {
+    content: " ↗";
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
+/* === FORMULARIO DE ENTRADA === */
+.chat-input {
+    padding: 16px 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0; /* No se comprime */
+}
+
+.chat-input input {
+    flex: 1;
+    padding: 12px;
+    min-height: 44px;
+    border: 2px solid #e0e0e0;
+    border-radius: 20px;
+    font-size: clamp(13px, 2.8vw, 14px);
+    max-height: 80px;
+    resize: none;
+}
+
+.chat-input input:focus {
+    outline: none;
+    border-color: #0D8EE3;
+}
+
+.send-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    background: linear-gradient(135deg, #0D8EE3, #0B7BC7);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+
+.send-btn:hover {
+    transform: scale(1.1);
+}
+
+.send-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: white;
+}
+
+.send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.chat-input input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.connection-status {
+    position: fixed;
+    bottom: 90px;
+    right: 30px;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    z-index: 10002;
+}
+
+.connection-status.connected {
+    background: #4CAF50;
+    color: white;
+}
+
+.connection-status.disconnected {
+    background: #F44336;
+    color: white;
+}
+
+/* === RESPONSIVE BREAKPOINTS === */
+
+/* Pantallas muy pequeñas (hasta 320px) */
+@media (max-width: 320px) {
+    .widget-container {
+        width: calc(100vw - 20px);
+        height: min(calc(100vh - 70px), 600px); /* También más alto aquí */
+        right: 10px;
+        bottom: 65px; /* Más cerca del borde */
+    }
+    
+    .widget-button {
+        right: 15px;
+        bottom: 65px; /* Ajustado para coincidir */
+        width: 50px;
+        height: 50px;
+    }
+    
+    .contact-links {
+        flex-direction: column;
+        gap: 4px;
+    }
+}
+
+/* Pantallas pequeñas (321px - 480px) */
+@media (max-width: 480px) {
+    .widget-container {
+        width: calc(100vw - 30px);
+        height: min(calc(100vh - 80px), 650px); /* Más alto: de 100px a 80px de margen */
+        bottom: 70px; /* Más cerca del borde: de 80px a 70px */
+    }
+
+    .widget-button {
+        bottom: 70px; /* Ajustado para coincidir */
+        right: 20px;
+    }
+
+    .contact-links {
+        gap: 6px;
+    }
+
+    .contact-link {
+        font-size: 10px;
+        padding: 3px 5px;
+    }
+    
+    .phone-group {
+        flex-direction: column;
+    }
+    
+    .phone-group select {
+        width: 100%;
+    }
+}
+
+/* Pantallas medianas (481px - 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+    .widget-container {
+        width: min(400px, calc(100vw - 60px));
+        height: min(650px, calc(100vh - 140px));
+    }
+}
+
+/* Pantallas grandes (769px - 1279px) */
+@media (min-width: 769px) and (max-width: 1279px) {
+    .widget-container {
+        width: 350px;
+        height: 520px;
+    }
+}
+
+/* Pantallas medianas-grandes (1025px - 1279px) - excluyendo 1280-1400 que ya tiene su propia regla */
+@media (min-width: 1025px) and (max-width: 1279px) {
+    .widget-container {
+        width: 360px;
+        height: 540px;
+    }
+}
+
+/* Pantallas extra grandes (1401px+) */
+@media (min-width: 1401px) {
+    .widget-container {
+        width: 420px;
+        height: 650px;
+        max-height: 700px;
+    }
+}
+
+/* Resoluciones 1366x768, 1280x720 y similares */
+@media (min-width: 1280px) and (max-width: 1400px) and (min-height: 720px) and (max-height: 800px) {
+    .widget-container {
+        width: 320px;
+        height: 480px;
+        bottom: 70px;
+    }
+    
+    .widget-button {
+        width: 50px;
+        height: 50px;
+        bottom: 15px;
+        right: 15px;
+    }
+    
+    .widget-button svg {
+        width: 24px;
+        height: 24px;
+    }
+    
+    .widget-header {
+        padding: 12px 16px;
+    }
+    
+    .widget-header h3 {
+        font-size: 14px;
+    }
+    
+    .widget-header .subtitle {
+        font-size: 11px;
+    }
+    
+    .contact-link {
+        font-size: 9px;
+        padding: 3px 5px;
+    }
+    
+    .welcome-form {
+        padding: 20px 16px;
+    }
+    
+    .welcome-form h4 {
+        font-size: 16px;
+    }
+    
+    .welcome-form p {
+        font-size: 13px;
+    }
+    
+    .form-group input,
+    .form-group select {
+        padding: 10px;
+        font-size: 13px;
+        min-height: 40px;
+    }
+    
+    .form-group label {
+        font-size: 12px;
+    }
+    
+    .captcha-question {
+        font-size: 13px;
+    }
+    
+    .captcha-input {
+        font-size: 14px;
+    }
+    
+    .start-btn {
+        padding: 10px;
+        font-size: 13px;
+        min-height: 40px;
+    }
+    
+    .chat-messages {
+        padding: 16px;
+    }
+    
+    .message-content {
+        padding: 10px 12px;
+        font-size: 13px;
+    }
+    
+    .avatar {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .chat-input {
+        padding: 12px 16px;
+    }
+    
+    .chat-input input {
+        padding: 10px;
+        font-size: 13px;
+        min-height: 40px;
+    }
+    
+    .send-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+    
+    .send-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+    .widget-container {
+        height: calc(100vh - 40px);
+        bottom: 20px;
+    }
+    
+    .welcome-form {
+        padding: 15px 20px;
+    }
+    
+    .form-group {
+        margin-bottom: 12px;
+    }
+}
+
+/* Pantallas de alta densidad (retina) */
+@media (-webkit-min-device-pixel-ratio: 2) {
+    .widget-button {
+        box-shadow: 0 2px 10px rgba(13, 142, 227, 0.4);
+    }
+    
+    .widget-container {
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+    }
+}
+
+/* === ESTADOS DE CARGA === */
+.loading {
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.error-message {
+    color: #e74c3c;
+    font-size: clamp(12px, 2.5vw, 13px);
+}
+
+@media (max-width: 768px) {
+    .widget-button.hide-on-mobile {
+        display: none !important;
+    }
+}
+
+/* === ANIMACIONES === */
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+    60% {
+        transform: translateY(-5px);
+    }
+}
+
+.widget-button.notification {
+    animation: bounce 2s infinite;
+}
+
+/* === MEJORAS DE ACCESIBILIDAD === */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+        </style>
+    </head>
+    <body>
+        <!-- Widget HTML -->
+        <div id="incalake-widget">
+            <!-- Botón flotante -->
+            <button class="widget-button" onclick="toggleWidget()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h4v3c0 .6.4 1 1 1h.5c.3 0 .5-.1.7-.3L13.4 18H20c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-3 12H7c-.6 0-1-.4-1-1s.4-1 1-1h10c.6 0 1 .4 1 1s-.4 1-1 1zm0-3H7c-.6 0-1-.4-1-1s.4-1 1-1h10c.6 0 1 .4 1 1s-.4 1-1 1zm0-3H7c-.6 0-1-.4-1-1s.4-1 1-1h10c.6 0 1 .4 1 1s-.4 1-1 1z"/>
+                </svg>
+            </button>
+
+            <!-- Ventana del chat -->
+            <div class="widget-container" id="widget-container">
+                <!-- Header -->
+                <div class="widget-header">
+                    <div class="header-info">
+                        <h3 data-translate="headerTitle">Asistente de Viajes IncaLake</h3>
+                        <div class="subtitle" data-translate="headerSubtitle">Disponible 24/7</div>
+                        <div class="contact-links">
+                            <a href="mailto:reservas@incalake.com" class="contact-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M20,8L12,13L4,8V6L12,11L20,6M20,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4Z"/>
+                                </svg>
+                                reservas@incalake.com
+                            </a>
+                            <a href="https://wa.me/51982769453" class="contact-link" target="_blank" rel="noopener">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M17.472,14.382c-0.297-0.149-1.758-0.867-2.03-0.967c-0.273-0.099-0.471-0.148-0.67,0.15c-0.197,0.297-0.767,0.966-0.94,1.164c-0.173,0.199-0.347,0.223-0.644,0.075c-0.297-0.15-1.255-0.463-2.39-1.475c-0.883-0.788-1.48-1.761-1.653-2.059c-0.173-0.297-0.018-0.458,0.13-0.606c0.134-0.133,0.297-0.347,0.446-0.52c0.149-0.173,0.198-0.297,0.297-0.497c0.099-0.198,0.05-0.371-0.025-0.52C10.612,9.611,9.53,7.229,9.282,6.638c-0.248-0.592-0.497-0.51-0.67-0.51c-0.173,0-0.371-0.025-0.57-0.025c-0.198,0-0.52,0.074-0.792,0.372c-0.272,0.297-1.04,1.016-1.04,2.479c0,1.462,1.065,2.875,1.213,3.074c0.149,0.198,2.096,3.2,5.077,4.487c0.709,0.306,1.262,0.489,1.694,0.625c0.712,0.227,1.36,0.195,1.871,0.118c0.571-0.085,1.758-0.719,2.006-1.413c0.248-0.694,0.248-1.289,0.173-1.413C17.967,14.605,17.769,14.531,17.472,14.382z M12.057,21.785h-0.008c-1.789,0-3.543-0.487-5.092-1.405l-0.365-0.218l-3.79,0.994l1.011-3.69l-0.238-0.378c-0.99-1.575-1.512-3.393-1.512-5.26c0-5.445,4.434-9.879,9.888-9.879c2.64,0,5.122,1.03,6.988,2.898c1.866,1.869,2.893,4.352,2.892,6.993C21.83,17.351,17.396,21.785,12.057,21.785z M20.5,3.488C18.25,1.24,15.24,0.003,12.057,0C5.439,0,0.057,5.383,0.057,12s5.383,12,12,12c6.617,0,12-5.383,12-12C24.057,8.817,22.75,5.988,20.5,3.488z"/>
+                                </svg>
+                                +51 982769453
+                            </a>
+                        </div>
+                    </div>
+                    <button class="close-btn" onclick="closeWidget()">&times;</button>
+                </div>
+
+                <!-- Formulario de bienvenida -->
+                <div class="welcome-form" id="welcome-form">
+                    <h4 data-translate="welcomeTitle">¡Bienvenido!</h4>
+                    <p data-translate="welcomeSubtitle">Ingresa tus datos para comenzar</p>
+                    
+                    <form onsubmit="startChat(event)">
+                        <div class="form-group">
+                            <label data-translate="nameLabel">Nombre</label>
+                            <input type="text" id="user-name" data-translate-placeholder="namePlaceholder" placeholder="Tu nombre completo" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label data-translate="emailLabel">Correo Electrónico</label>
+                            <input type="email" id="user-email" data-translate-placeholder="emailPlaceholder" placeholder="tu.correo@ejemplo.com" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label data-translate="whatsappLabel">WhatsApp</label>
+                            <div class="phone-group">
+                                <select id="country-code" required>
+                                    <option value="+51">🇵🇪 +51</option>
+                                    <option value="+1">🇺🇸 +1</option>
+                                    <option value="+34">🇪🇸 +34</option>
+                                    <option value="+33">🇫🇷 +33</option>
+                                    <option value="+49">🇩🇪 +49</option>
+                                    <option value="+39">🇮🇹 +39</option>
+                                    <option value="+55">🇧🇷 +55</option>
+                                    <option value="+52">🇲🇽 +52</option>
+                                    <option value="+54">🇦🇷 +54</option>
+                                    <option value="+56">🇨🇱 +56</option>
+                                    <option value="+57">🇨🇴 +57</option>
+                                    <option value="+44">🇬🇧 +44</option>
+                                    <option value="+81">🇯🇵 +81</option>
+                                    <option value="+86">🇨🇳 +86</option>
+                                    <option value="+91">🇮🇳 +91</option>
+                                    <option value="+61">🇦🇺 +61</option>
+                                </select>
+                                <input type="tel" id="whatsapp-number" data-translate-placeholder="whatsappPlaceholder" placeholder="982769453" required pattern="[0-9]{6,15}">
+                            </div>
+                        </div>
+
+                        <!-- Captcha -->
+                        <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
+           
+                        <button type="submit" class="start-btn" data-translate="startButton">Iniciar Chat</button>
+                        
+                    </form>
+                </div>
+
+                <!-- Área del chat -->
+                <div class="chat-area" id="chat-area">
+                    <div class="chat-messages" id="chat-messages"></div>
+                    
+                    <form class="chat-input" onsubmit="sendMessage(event)">
+                        <input type="text" id="message-input" data-translate-placeholder="inputPlaceholder" placeholder="Escribe tu pregunta aquí..." autocomplete="off" required>
+                        <button type="submit" class="send-btn" id="send-btn">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M2,21L23,12L2,3V10L17,12L2,14V21Z"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    
+<script>
+    // === CONFIGURACIÓN ===
+    const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ?
+      'http://127.0.0.1:5000' :
+      window.location.origin;
+    const BOT_AVATAR_URL = 'https://img.freepik.com/vector-gratis/chatbot-mensaje-chat-vectorart_78370-4104.jpg?semt=ais_hybrid&w=740';
+
+    // === TRADUCCIONES ===
+    const translations = {
+      en: {
+        headerTitle: "IncaLake Travel Assistant",
+        headerSubtitle: "Available 24/7",
+        welcomeTitle: "Welcome!",
+        welcomeSubtitle: "Enter your details to begin",
+        nameLabel: "Name",
+        namePlaceholder: "Your full name",
+        emailLabel: "Email Address",
+        emailPlaceholder: "your.email@example.com",
+        whatsappLabel: "WhatsApp",
+        whatsappPlaceholder: "982769453",
+        startButton: "Start Chat",
+        inputPlaceholder: "Type your question here...",
+        loadingMessage: "IncaLake Assistant is responding...",
+        connectionError: "Sorry, a connection error occurred. Please try again later.",
+        serverError: "Sorry, the server reported an error",
+        captchaError: "Please complete the reCAPTCHA verification",
+        welcomeBack: "Welcome back, **{name}**! 👋 How can I assist you today?",
+        sessionExpired: "Your previous session has expired. Let's start fresh!"
+      },
+      es: {
+        headerTitle: "Asistente de Viajes IncaLake",
+        headerSubtitle: "Disponible 24/7",
+        welcomeTitle: "¡Bienvenido!",
+        welcomeSubtitle: "Ingresa tus datos para comenzar",
+        nameLabel: "Nombre",
+        namePlaceholder: "Tu nombre completo",
+        emailLabel: "Correo Electrónico",
+        emailPlaceholder: "tu.correo@ejemplo.com",
+        whatsappLabel: "WhatsApp",
+        whatsappPlaceholder: "982769453",
+        startButton: "Iniciar Chat",
+        inputPlaceholder: "Escribe tu pregunta aquí...",
+        loadingMessage: "IncaLake Assistant está respondiendo...",
+        connectionError: "Lo siento, ocurrió un error de conexión. Por favor, inténtalo más tarde.",
+        serverError: "Lo siento, el servidor reportó un error",
+        captchaError: "Por favor completa la verificación reCAPTCHA",
+        welcomeBack: "¡Hola de nuevo, **{name}**! 👋 ¿En qué más te puedo ayudar?",
+        sessionExpired: "Tu sesión previa ha expirado. ¡Comencemos de nuevo!"
+      }
+    };
+
+    // === VARIABLES GLOBALES ===
+    let currentLang = 'en'; // CAMBIADO: Por defecto inglés en lugar de español
+    let isWidgetOpen = false;
+    let userName = '';
+    let userEmail = '';
+    let userWhatsapp = '';
+    let isProcessingMessage = false;
+    let chatInitialized = false;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+
+    // Variables para controlar la persistencia y renderizado
+    window.incalakeAutoInitialized = false;
+    let historialCargado = [];
+    let chatAreaPreparada = false;
+    let historialRenderizado = false;
+    let isLoadingHistoryFromServer = false;
+
+    // === GESTIÓN DE SESIÓN ===
+    const MAX_SESSION_TIME_MS = 48 * 60 * 60 * 1000; // 48 horas
+    let sessionId;
+
+    function generateSessionId() {
+      const id = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      const sessionData = {
+        id,
+        timestamp: Date.now(),
+        userData: {
+          userName,
+          userEmail,
+          userWhatsapp
+        }
+      };
+      localStorage.setItem('incalake_session', JSON.stringify(sessionData));
+      return id;
+    }
+
+    function getSessionId() {
+      const stored = localStorage.getItem('incalake_session');
+      if (stored) {
+        try {
+          const sessionData = JSON.parse(stored);
+          const isExpired = Date.now() - sessionData.timestamp > MAX_SESSION_TIME_MS;
+
+          if (!isExpired) {
+            if (sessionData.userData) {
+              userName = sessionData.userData.userName || '';
+              userEmail = sessionData.userData.userEmail || '';
+              userWhatsapp = sessionData.userData.userWhatsapp || '';
+            }
+            return sessionData.id;
+          } else {
+            localStorage.removeItem('incalake_session');
+            localStorage.removeItem('incalake_user_started');
+          }
+        } catch (e) {
+          console.error('Error reading session from localStorage:', e);
+          localStorage.removeItem('incalake_session');
+        }
+      }
+      return generateSessionId();
+    }
+
+    function getSessionData() {
+      const stored = localStorage.getItem('incalake_session');
+      if (!stored) return null;
+
+      try {
+        const sessionData = JSON.parse(stored);
+        const isExpired = Date.now() - sessionData.timestamp > MAX_SESSION_TIME_MS;
+
+        if (isExpired) {
+          console.log('⏰ Sesión expirada, limpiando datos');
+          localStorage.removeItem('incalake_session');
+          localStorage.removeItem('incalake_user_started');
+          return null;
+        }
+
+        return sessionData;
+      } catch (e) {
+        console.error('Error leyendo datos de sesión:', e);
+        localStorage.removeItem('incalake_session');
+        return null;
+      }
+    }
+
+    function updateSessionData() {
+      const currentSession = JSON.parse(localStorage.getItem('incalake_session')) || {};
+      currentSession.userData = {
+        userName,
+        userEmail,
+        userWhatsapp
+      };
+      currentSession.timestamp = Date.now();
+      localStorage.setItem('incalake_session', JSON.stringify(currentSession));
+    }
+
+    sessionId = getSessionId();
+
+    // === FUNCIONES DE UTILIDAD ===
+    function setLanguage() {
+      const t = translations[currentLang];
+
+      document.querySelectorAll('[data-translate]').forEach(el => {
+        const key = el.getAttribute('data-translate');
+        if (t[key]) el.textContent = t[key];
+      });
+
+      document.querySelectorAll('[data-translate-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-translate-placeholder');
+        if (t[key]) el.placeholder = t[key];
+      });
+
+      localStorage.setItem('incalake_preferred_language', currentLang);
+    }
+
+    function detectLanguage() {
+      // CORREGIDO: Lógica de detección de idioma con fallback mejorado
+      const urlParams = new URLSearchParams(window.location.search);
+      const langFromUrl = urlParams.get('lang');
+
+      if (langFromUrl && translations[langFromUrl]) {
+        currentLang = langFromUrl;
+        return;
+      }
+
+      const pathSegments = window.location.pathname.split('/').filter(segment => segment.length > 0);
+      const languageSegments = ['es', 'en'];
+
+      for (let i = 0; i < pathSegments.length; i++) {
+        const segment = pathSegments[i].toLowerCase();
+        if (languageSegments.includes(segment)) {
+          currentLang = segment;
+          return;
+        }
+      }
+
+      // Verificar idioma guardado en localStorage
+      const savedLang = localStorage.getItem('incalake_preferred_language');
+      if (savedLang && translations[savedLang]) {
+        currentLang = savedLang;
+        return;
+      }
+
+      // Detectar por el navegador - CORREGIDO: Por defecto inglés
+      const userLang = navigator.language || navigator.userLanguage;
+      if (userLang.startsWith('es')) {
+        currentLang = 'es';
+      } else {
+        currentLang = 'en'; // Por defecto inglés para idiomas no reconocidos
+      }
+    }
+
+    // === FUNCIONES DEL CHAT ===
+    function toggleWidget() {
+      const container = document.getElementById('widget-container');
+      const button = document.querySelector('.widget-button');
+
+      if (!isWidgetOpen) {
+        container.classList.add('show');
+        button.classList.add('open');
+        button.classList.remove('notification');
+        isWidgetOpen = true;
+
+        if (window.innerWidth <= 768) {
+          button.classList.add('hide-on-mobile');
+        }
+
+        if (!chatInitialized) {
+          initializeChat(false);
+          chatInitialized = true;
+        } else if (chatAreaPreparada && historialCargado.length > 0 && !historialRenderizado) {
+          renderStoredMessages();
+        }
+
+        setTimeout(() => focusInput(), 300);
+      } else {
+        closeWidget();
+      }
+    }
+
+    function closeWidget() {
+      const container = document.getElementById('widget-container');
+      const button = document.querySelector('.widget-button');
+      container.classList.remove('show');
+      button.classList.remove('open');
+      isWidgetOpen = false;
+
+      if (window.innerWidth <= 768) {
+        button.classList.remove('hide-on-mobile');
+      }
+    }
+
+    function focusInput() {
+      const container = document.getElementById('widget-container');
+      const firstInput = container.querySelector('input:not([disabled])');
+      if (firstInput) firstInput.focus();
+    }
+
+    async function startChat(event) {
+      event.preventDefault();
+
+      userName = document.getElementById('user-name').value.trim();
+      userEmail = document.getElementById('user-email').value.trim();
+      const countryCode = document.getElementById('country-code').value;
+      const whatsappNumber = document.getElementById('whatsapp-number').value.trim();
+
+      if (!userName || !userEmail || !whatsappNumber) return;
+
+      const recaptchaResponse = grecaptcha.getResponse();
+      if (!recaptchaResponse) {
+        alert(translations[currentLang].captchaError);
+        return;
+      }
+
+      userWhatsapp = (countryCode + whatsappNumber).replace(/\D/g, '');
+
+      try {
+        const startBtn = document.querySelector('.start-btn');
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<span class="loading">Registrando...</span>';
+
+        const response = await fetch(`${API_BASE_URL}/register_user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            nombre: userName,
+            correo: userEmail,
+            whatsapp: userWhatsapp,
+            session_id: sessionId
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || translations[currentLang].serverError);
+        }
+
+        historialCargado = [];
+        historialRenderizado = false;
+
+        document.getElementById('welcome-form').style.display = 'none';
+        document.getElementById('chat-area').classList.add('active');
+        chatAreaPreparada = true;
+
+        const messagesContainer = document.getElementById('chat-messages');
+        if (messagesContainer) messagesContainer.innerHTML = '';
+
+        const welcomeMessage = currentLang === 'es' ?
+          `¡Hola, **${userName}**! 👋 Soy IncaBot, tu asistente de viajes. ¿En qué puedo ayudarte hoy?` :
+          `Hi **${userName}**! 👋 I'm IncaBot, your travel assistant. How can I help you today?`;
+
+        appendMessage(welcomeMessage, 'bot');
+        grecaptcha.reset();
+
+        localStorage.setItem('incalake_user_started', '1');
+        updateSessionData();
+
+      } catch (error) {
+        alert(error.message);
+        console.error('Error al registrar:', error);
+      } finally {
+        const startBtn = document.querySelector('.start-btn');
+        startBtn.disabled = false;
+        startBtn.textContent = translations[currentLang].startButton;
+        setTimeout(focusInput, 100);
+      }
+    }
+
+    function setInputState(disabled) {
+      const messageInput = document.getElementById('message-input');
+      const sendBtn = document.getElementById('send-btn');
+      if (messageInput) messageInput.disabled = disabled;
+      if (sendBtn) sendBtn.disabled = disabled;
+    }
+
+    async function sendMessage(event) {
+      event.preventDefault();
+      if (isProcessingMessage) return;
+
+      const input = document.getElementById('message-input');
+      const message = input.value.trim();
+      if (!message) return;
+
+      isProcessingMessage = true;
+      setInputState(true);
+
+      appendMessage(message, 'user');
+      input.value = '';
+
+      const loadingMsgId = 'loading-' + Date.now();
+      appendMessage(translations[currentLang].loadingMessage, 'bot', true, loadingMsgId);
+
+      try {
+        const userResponse = await fetch(`${API_BASE_URL}/register_user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            nombre: userName,
+            correo: userEmail,
+            whatsapp: userWhatsapp,
+            session_id: sessionId
+          })
+        });
+
+        if (!userResponse.ok) {
+          throw new Error(translations[currentLang].connectionError);
+        }
+
+        const chatResponse = await fetchWithRetry(`${API_BASE_URL}/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message,
+            session_id: sessionId,
+            language: currentLang
+          }),
+        });
+
+        removeMessage(loadingMsgId);
+
+        if (!chatResponse.ok) {
+          const errorData = await chatResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || translations[currentLang].serverError);
+        }
+
+        await streamResponse(chatResponse, message);
+
+      } catch (error) {
+        removeMessage(loadingMsgId);
+        console.error('Error:', error);
+
+        const messagesContainer = document.getElementById('chat-messages');
+        const lastMessage = messagesContainer.lastElementChild;
+        const lastContent = lastMessage ? lastMessage.querySelector('.message-content').textContent : '';
+
+        if (!lastContent.includes(error.message)) {
+          appendMessage(error.message, 'bot');
+        }
+      } finally {
+        isProcessingMessage = false;
+        setInputState(false);
+        retryCount = 0;
+        setTimeout(focusInput, 100);
+      }
+    }
+
+    async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return response;
+      } catch (error) {
+        if (retries <= 0) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * (MAX_RETRIES - retries + 1)));
+        return fetchWithRetry(url, options, retries - 1);
+      }
+    }
+
+    async function streamResponse(response, originalMessage) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let botResponse = '';
+      const botMsgId = 'bot-msg-' + Date.now();
+
+      appendMessage('', 'bot', false, botMsgId);
+      const botMsgElement = document.querySelector(`[data-msg-id="${botMsgId}"] .message-content`);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        botResponse += chunk;
+
+        if (botMsgElement) {
+          botMsgElement.innerHTML = marked.parse(botResponse);
+          processLinks(botMsgElement);
+          scrollToBottom();
+        }
+      }
+
+      updateMessageInHistory(botMsgId, botResponse);
+      saveConversationToSession(originalMessage, botResponse);
+    }
+
+    function updateMessageInHistory(msgId, finalText) {
+      const messageIndex = historialCargado.findIndex(msg => msg.msgId === msgId);
+      if (messageIndex !== -1) {
+        historialCargado[messageIndex].text = finalText;
+        historialCargado[messageIndex].isLoading = false;
+      }
+    }
+
+    function processLinks(element) {
+      const links = element.querySelectorAll('a');
+      links.forEach(link => {
+        link.setAttribute('target', '_blank');
+        link.setAttribute('rel', 'noopener noreferrer');
+      });
+    }
+
+    function saveConversationToSession(question, answer) {
+      updateSessionData();
+    }
+
+    function appendMessage(text, type, isLoading = false, msgId = null) {
+      const messagesContainer = document.getElementById('chat-messages');
+      const finalMsgId = msgId || `${type}-msg-${Date.now()}`;
+
+      const messageData = {
+        text,
+        type,
+        isLoading,
+        msgId: finalMsgId,
+        timestamp: Date.now()
+      };
+
+      const isDuplicate = historialCargado.some(msg =>
+        msg.text === text && msg.type === type && Math.abs(msg.timestamp - messageData.timestamp) < 1000
+      );
+
+      if (!isDuplicate) {
+        historialCargado.push(messageData);
+      }
+
+      if (messagesContainer && !isLoadingHistoryFromServer) {
+        renderSingleMessage(messageData, messagesContainer);
+      }
+    }
+
+    function renderSingleMessage(messageData, container) {
+      const messageRow = document.createElement('div');
+      messageRow.className = `message-row ${messageData.type}`;
+      messageRow.setAttribute('data-msg-id', messageData.msgId);
+
+      if (messageData.type === 'user') {
+        messageRow.innerHTML = `<div class="message-content">${messageData.text}</div>`;
+      } else {
+        const loadingClass = messageData.isLoading ? 'loading' : '';
+        const parsedText = messageData.text ? marked.parse(messageData.text) : messageData.text;
+        messageRow.innerHTML = `
+          <img src="${BOT_AVATAR_URL}" alt="IncaBot" class="avatar">
+          <div class="message-content ${loadingClass}">${parsedText}</div>`;
+      }
+
+      container.appendChild(messageRow);
+
+      if (isWidgetOpen) {
+        scrollToBottom();
+      }
+
+      if (messageData.type === 'bot' && !messageData.isLoading && messageData.text) {
+        processLinks(messageRow);
+      }
+    }
+
+    function renderStoredMessages() {
+      const messagesContainer = document.getElementById('chat-messages');
+      if (!messagesContainer) return;
+
+      if (historialCargado.length === 0 || historialRenderizado) {
+        return;
+      }
+
+      messagesContainer.innerHTML = '';
+
+      historialCargado.forEach((messageData) => {
+        renderSingleMessage(messageData, messagesContainer);
+      });
+
+      historialRenderizado = true;
+
+      if (isWidgetOpen) {
+        setTimeout(() => {
+          scrollToBottom();
+        }, 150);
+      }
+    }
+
+    function removeMessage(msgId) {
+      const messageElement = document.querySelector(`[data-msg-id="${msgId}"]`);
+      if (messageElement) {
+        messageElement.remove();
+      }
+
+      const messageIndex = historialCargado.findIndex(msg => msg.msgId === msgId);
+      if (messageIndex !== -1) {
+        historialCargado.splice(messageIndex, 1);
+      }
+    }
+
+    function scrollToBottom() {
+      const messagesContainer = document.getElementById('chat-messages');
+      if (messagesContainer && isWidgetOpen) {
+        requestAnimationFrame(() => {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        });
+      }
+    }
+
+    // CORREGIDO: Función mejorada para cargar historial del servidor
+    async function loadChatHistory() {
+      try {
+        isLoadingHistoryFromServer = true;
+        console.log('🔄 Cargando historial desde servidor para sesión:', sessionId);
+
+        const response = await fetchWithRetry(`${API_BASE_URL}/session/${sessionId}/history`);
+
+        if (!response.ok) {
+          console.log('❌ Error al cargar historial:', response.status);
+          return false;
+        }
+
+        const data = await response.json();
+        console.log('📥 Datos recibidos del servidor:', data);
+
+        if (data?.historial?.length > 0) {
+          historialCargado = [];
+          historialRenderizado = false;
+
+          // CORREGIDO: Procesar mensajes del servidor con formato correcto
+          data.historial.forEach((msg, index) => {
+            let messageRole, messageContent;
+
+            // Adaptarse a diferentes formatos de respuesta del servidor
+            if (msg.role && msg.content) {
+              messageRole = msg.role;
+              messageContent = msg.content;
+            } else if (msg.rol && msg.contenido) {
+              messageRole = msg.rol;
+              messageContent = msg.contenido;
+            } else if (msg.role && msg.parts) {
+              messageRole = msg.role;
+              messageContent = Array.isArray(msg.parts) ? msg.parts.join(' ') : msg.parts;
+            } else {
+              console.warn('Formato de mensaje desconocido:', msg);
+              return;
+            }
+
+            // Mapear roles del servidor al formato del frontend
+            const messageType = (messageRole === 'user') ? 'user' : 'bot';
+
+            const messageData = {
+              text: messageContent,
+              type: messageType,
+              isLoading: false,
+              msgId: `${messageType}-history-${index}-${Date.now()}`,
+              timestamp: Date.now() + index
+            };
+
+            historialCargado.push(messageData);
+          });
+
+          console.log('✅ Historial cargado exitosamente:', historialCargado.length, 'mensajes');
+          return true;
+        } else {
+          console.log('📝 No hay historial previo en el servidor');
+          return false;
+        }
+      } catch (error) {
+        console.error('❌ Error cargando historial:', error);
+        return false;
+      } finally {
+        isLoadingHistoryFromServer = false;
+      }
+    }
+
+    async function initializeChat(isAutoInit = false) {
+      const userStarted = localStorage.getItem('incalake_user_started') === '1';
+      console.log('🚀 Inicializando chat - userStarted:', userStarted, 'isAutoInit:', isAutoInit);
+
+      if (userStarted) {
+        const welcomeForm = document.getElementById('welcome-form');
+        const chatArea = document.getElementById('chat-area');
+
+        if (welcomeForm) welcomeForm.style.display = 'none';
+        if (chatArea) chatArea.classList.add('active');
+
+        chatAreaPreparada = true;
+
+        // CORREGIDO: Siempre intentar cargar historial del servidor
+        const hasHistory = await loadChatHistory();
+        console.log('📚 ¿Historial cargado?', hasHistory);
+
+        // Solo mostrar mensaje de bienvenida si NO hay historial
+        if (!hasHistory && userName) {
+          const welcomeMessage = currentLang === 'es' ?
+            `¡Hola de nuevo, **${userName}**! 👋 ¿En qué más te puedo ayudar?` :
+            `Welcome back, **${userName}**! 👋 How can I assist you today?`;
+
+          const messageData = {
+            text: welcomeMessage,
+            type: 'bot',
+            isLoading: false,
+            msgId: `bot-welcome-${Date.now()}`,
+            timestamp: Date.now()
+          };
+          historialCargado.push(messageData);
+        }
+
+        if (isAutoInit) {
+          window.incalakeAutoInitialized = true;
+        } else if (isWidgetOpen) {
+          // CORREGIDO: Asegurar que se renderice el historial cuando se abre el widget
+          setTimeout(() => renderStoredMessages(), 100);
+        }
+      } else {
+        const welcomeForm = document.getElementById('welcome-form');
+        const chatArea = document.getElementById('chat-area');
+
+        if (welcomeForm) welcomeForm.style.display = 'block';
+        if (chatArea) chatArea.classList.remove('active');
+
+        if (isAutoInit) {
+          window.incalakeAutoInitialized = false;
+        }
+      }
+    }
+
+    async function autoInitializeOnPageLoad() {
+      const userStarted = localStorage.getItem('incalake_user_started') === '1';
+      const sessionData = getSessionData();
+
+      console.log('🔄 Auto-inicialización - userStarted:', userStarted, 'sessionData:', !!sessionData);
+
+      if (!userStarted || !sessionData) {
+        window.incalakeAutoInitialized = false;
+        return;
+      }
+
+      if (sessionData.userData) {
+        userName = sessionData.userData.userName || '';
+        userEmail = sessionData.userData.userEmail || '';
+        userWhatsapp = sessionData.userData.userWhatsapp || '';
+        sessionId = sessionData.id;
+      }
+
+      if (!userName || !userEmail || !sessionId) {
+        console.log('❌ Datos de sesión incompletos');
+        window.incalakeAutoInitialized = false;
+        return;
+      }
+
+      try {
+        await initializeChat(true);
+        console.log('✅ Auto-inicialización completada');
+      } catch (error) {
+        console.error('❌ Error en auto-inicialización:', error);
+        window.incalakeAutoInitialized = false;
+      }
+    }
+
+    // === INICIALIZACIÓN ===
+    document.addEventListener('DOMContentLoaded', async () => {
+      console.log('🚀 DOM cargado, iniciando aplicación');
+      detectLanguage();
+      console.log('🌐 Idioma detectado:', currentLang);
+      setLanguage();
+      await autoInitializeOnPageLoad();
+
+      setTimeout(() => {
+        if (!isWidgetOpen) {
+          const button = document.querySelector('.widget-button');
+          if (button) button.classList.add('notification');
+        }
+      }, 3000);
+    });
+
+    // Manejo de eventos globales
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isWidgetOpen) {
+        closeWidget();
+      }
+    });
+
+    document.addEventListener('click', (event) => {
+      if (isWidgetOpen && !event.target.closest('#incalake-widget') &&
+        window.innerWidth > 480 && !isProcessingMessage) {
+        closeWidget();
+      }
+    });
+
+    setInterval(() => {
+      if (isWidgetOpen) {
+        updateSessionData();
+      }
+    }, 5 * 60 * 1000);
+
+    // Exponer funciones para debugging
+    window.incalakeDebug = {
+      get historialCargado() { return historialCargado; },
+      get chatAreaPreparada() { return chatAreaPreparada; },
+      get historialRenderizado() { return historialRenderizado; },
+      get userName() { return userName; },
+      get sessionId() { return sessionId; },
+      get isWidgetOpen() { return isWidgetOpen; },
+      get currentLang() { return currentLang; },
+
+      renderStoredMessages: () => {
+        historialRenderizado = false;
+        renderStoredMessages();
+      },
+      loadChatHistory: () => loadChatHistory(),
+      clearHistory: () => {
+        historialCargado = [];
+        historialRenderizado = false;
+        const container = document.getElementById('chat-messages');
+        if (container) container.innerHTML = '';
+      },
+      simulateToggle: () => toggleWidget(),
+      forceLanguageChange: (newLang) => {
+        if (!translations[newLang]) return false;
+        currentLang = newLang;
+        setLanguage();
+        return true;
+      },
+      // NUEVAS funciones de debug
+      testHistoryLoad: async () => {
+        console.log('🧪 Testing manual history load...');
+        const result = await loadChatHistory();
+        console.log('📊 Result:', result);
+        console.log('📚 Loaded messages:', historialCargado.length);
+        return result;
+      },
+      showSessionInfo: () => {
+        console.log('📋 Session Info:', {
+          sessionId,
+          userName,
+          userEmail,
+          userStarted: localStorage.getItem('incalake_user_started'),
+          historialLength: historialCargado.length,
+          chatAreaPreparada,
+          historialRenderizado
+        });
+      }
+    };
+  </script>
+
+    </body>
+    </html>
