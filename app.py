@@ -814,6 +814,339 @@ def health_check():
             "error": str(e)
         }), 503
 
+@app.route('/', methods=['GET'])
+def root():
+    """Endpoint raíz para verificar que la API está funcionando."""
+    return jsonify({
+        "message": "IncaLake Chatbot API is running",
+        "version": "3.1.1-fs",
+        "status": "healthy", 
+        "timestamp": datetime.utcnow().isoformat(),
+        "endpoints": [
+            "/health",
+            "/register_user", 
+            "/chat",
+            "/destinations",
+            "/session/<session_id>/history",
+            "/session/<session_id>/clear",
+            "/admin/conversations",
+            "/admin/conversation/<session_id>/full", 
+            "/admin/conversations/search",
+            "/admin/stats"
+        ]
+    })
+
+# === Endpoints de Admin ===
+@app.route('/admin/conversations', methods=['GET'])
+def get_all_conversations():
+    """
+    Obtiene todas las conversaciones con información completa para el CMS.
+    Parámetros opcionales:
+    - limit: número de conversaciones (default: 50)
+    - offset: para paginación (default: 0)
+    - search: buscar por nombre, correo o contenido
+    """
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        search = request.args.get('search', '', type=str).lower()
+        
+        # Obtener todos los archivos JSON de sesiones
+        if not os.path.exists(CHATSESSIONS_DIR):
+            return jsonify({
+                "success": True,
+                "conversations": [],
+                "total_files": 0,
+                "returned": 0,
+                "pagination": {
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": False
+                }
+            })
+        
+        session_files = [f for f in os.listdir(CHATSESSIONS_DIR) if f.endswith('.json')]
+        session_files.sort(key=lambda x: os.path.getmtime(os.path.join(CHATSESSIONS_DIR, x)), reverse=True)
+        
+        conversations = []
+        
+        for file_name in session_files[offset:]:
+            if len(conversations) >= limit:
+                break
+                
+            try:
+                file_path = os.path.join(CHATSESSIONS_DIR, file_name)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    session_data = json.load(f)
+                
+                # Extraer información básica
+                user_info = session_data.get('user', {})
+                history = session_data.get('history', [])
+                
+                if not user_info:  # Saltar sesiones sin usuario
+                    continue
+                
+                # Aplicar filtro de búsqueda si existe
+                if search:
+                    searchable_text = (
+                        user_info.get('nombre', '').lower() + ' ' +
+                        user_info.get('correo', '').lower() + ' ' +
+                        ' '.join([msg.get('content', '') for msg in history]).lower()
+                    )
+                    if search not in searchable_text:
+                        continue
+                
+                # Calcular estadísticas
+                user_messages = [msg for msg in history if msg.get('role') == 'user']
+                assistant_messages = [msg for msg in history if msg.get('role') == 'assistant']
+                
+                # Obtener timestamps
+                first_message_time = None
+                last_message_time = None
+                if history:
+                    first_message_time = history[0].get('timestamp')
+                    last_message_time = history[-1].get('timestamp')
+                
+                conversation_summary = {
+                    "session_id": user_info.get('session_id', ''),
+                    "file_name": file_name,
+                    "user": {
+                        "id": user_info.get('id', ''),
+                        "nombre": user_info.get('nombre', ''),
+                        "correo": user_info.get('correo', ''),
+                        "whatsapp": user_info.get('whatsapp', '')
+                    },
+                    "conversation_stats": {
+                        "total_messages": len(history),
+                        "user_messages": len(user_messages),
+                        "assistant_messages": len(assistant_messages),
+                        "first_message": first_message_time,
+                        "last_message": last_message_time
+                    },
+                    "last_user_message": user_messages[-1].get('content', '')[:100] + '...' if user_messages else '',
+                    "file_modified": datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
+                }
+                
+                conversations.append(conversation_summary)
+                
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Error leyendo archivo {file_name}: {str(e)}")
+                continue
+        
+        return jsonify({
+            "success": True,
+            "conversations": conversations,
+            "total_files": len(session_files),
+            "returned": len(conversations),
+            "pagination": {
+                "limit": limit,
+                "offset": offset,
+                "has_more": offset + limit < len(session_files)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo todas las conversaciones: {str(e)}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor"}), 500
+
+@app.route('/admin/conversation/<session_id>/full', methods=['GET'])
+def get_full_conversation(session_id):
+    """
+    Obtiene la conversación completa con todos los detalles para el CMS.
+    Devuelve exactamente el mismo formato que está en el archivo JSON.
+    """
+    try:
+        session_data = load_session(session_id)
+        
+        if not session_data:
+            return jsonify({"error": "Conversación no encontrada"}), 404
+        
+        # Agregar metadatos del archivo
+        file_path = get_session_file(session_id)
+        if os.path.exists(file_path):
+            file_stats = os.stat(file_path)
+            session_data['file_metadata'] = {
+                "file_name": f"{session_id}.json",
+                "file_size": file_stats.st_size,
+                "created": datetime.fromtimestamp(file_stats.st_ctime).isoformat(),
+                "modified": datetime.fromtimestamp(file_stats.st_mtime).isoformat()
+            }
+        
+        return jsonify({
+            "success": True,
+            "session_data": session_data
+        })
+        
+    except json.JSONDecodeError:
+        return jsonify({"error": "Error al leer el archivo JSON"}), 500
+    except Exception as e:
+        logger.error(f"Error obteniendo conversación completa: {str(e)}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor"}), 500
+
+@app.route('/admin/conversations/search', methods=['GET'])
+def search_conversations():
+    """
+    Busca en todas las conversaciones por contenido específico.
+    Parámetros:
+    - q: término de búsqueda
+    - field: campo específico (nombre, correo, whatsapp, content)
+    - limit: número de resultados
+    """
+    try:
+        query = request.args.get('q', '').lower().strip()
+        field = request.args.get('field', 'all')
+        limit = request.args.get('limit', 20, type=int)
+        
+        if not query:
+            return jsonify({"error": "Parámetro 'q' es requerido"}), 400
+        
+        if not os.path.exists(CHATSESSIONS_DIR):
+            return jsonify({
+                "success": True,
+                "query": query,
+                "field": field,
+                "results": [],
+                "total_found": 0
+            })
+        
+        session_files = [f for f in os.listdir(CHATSESSIONS_DIR) if f.endswith('.json')]
+        results = []
+        
+        for file_name in session_files:
+            if len(results) >= limit:
+                break
+                
+            try:
+                file_path = os.path.join(CHATSESSIONS_DIR, file_name)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    session_data = json.load(f)
+                
+                user_info = session_data.get('user', {})
+                history = session_data.get('history', [])
+                
+                if not user_info:  # Saltar sesiones sin usuario
+                    continue
+                
+                # Determinar si coincide con la búsqueda
+                match_found = False
+                match_details = []
+                
+                if field == 'all' or field == 'nombre':
+                    if query in user_info.get('nombre', '').lower():
+                        match_found = True
+                        match_details.append(f"Nombre: {user_info.get('nombre', '')}")
+                
+                if field == 'all' or field == 'correo':
+                    if query in user_info.get('correo', '').lower():
+                        match_found = True
+                        match_details.append(f"Correo: {user_info.get('correo', '')}")
+                
+                if field == 'all' or field == 'whatsapp':
+                    if query in user_info.get('whatsapp', ''):
+                        match_found = True
+                        match_details.append(f"WhatsApp: {user_info.get('whatsapp', '')}")
+                
+                if field == 'all' or field == 'content':
+                    for msg in history:
+                        if query in msg.get('content', '').lower():
+                            match_found = True
+                            content_preview = msg.get('content', '')[:100] + '...'
+                            match_details.append(f"Mensaje ({msg.get('role', '')}): {content_preview}")
+                            break
+                
+                if match_found:
+                    results.append({
+                        "session_id": user_info.get('session_id', ''),
+                        "file_name": file_name,
+                        "user": user_info,
+                        "matches": match_details,
+                        "total_messages": len(history)
+                    })
+                    
+            except (json.JSONDecodeError, IOError) as e:
+                continue
+        
+        return jsonify({
+            "success": True,
+            "query": query,
+            "field": field,
+            "results": results,
+            "total_found": len(results)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en búsqueda: {str(e)}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor"}), 500
+
+@app.route('/admin/stats', methods=['GET'])
+def get_conversation_stats():
+    """
+    Obtiene estadísticas generales de todas las conversaciones.
+    """
+    try:
+        if not os.path.exists(CHATSESSIONS_DIR):
+            return jsonify({
+                "success": True,
+                "stats": {
+                    "total_conversations": 0,
+                    "total_messages": 0,
+                    "unique_users": 0,
+                    "average_messages_per_conversation": 0,
+                    "date_range": {"earliest": None, "latest": None}
+                }
+            })
+        
+        session_files = [f for f in os.listdir(CHATSESSIONS_DIR) if f.endswith('.json')]
+        
+        total_conversations = 0
+        total_messages = 0
+        total_users = set()
+        date_range = {"earliest": None, "latest": None}
+        
+        for file_name in session_files:
+            try:
+                file_path = os.path.join(CHATSESSIONS_DIR, file_name)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    session_data = json.load(f)
+                
+                user_info = session_data.get('user', {})
+                history = session_data.get('history', [])
+                
+                if not user_info:  # Saltar sesiones sin usuario
+                    continue
+                
+                total_conversations += 1
+                total_messages += len(history)
+                if user_info.get('correo'):
+                    total_users.add(user_info.get('correo'))
+                
+                # Actualizar rango de fechas
+                for msg in history:
+                    timestamp = msg.get('timestamp')
+                    if timestamp:
+                        if not date_range["earliest"] or timestamp < date_range["earliest"]:
+                            date_range["earliest"] = timestamp
+                        if not date_range["latest"] or timestamp > date_range["latest"]:
+                            date_range["latest"] = timestamp
+                            
+            except (json.JSONDecodeError, IOError):
+                continue
+        
+        return jsonify({
+            "success": True,
+            "stats": {
+                "total_conversations": total_conversations,
+                "total_messages": total_messages,
+                "unique_users": len(total_users),
+                "average_messages_per_conversation": round(total_messages / max(total_conversations, 1), 2),
+                "date_range": date_range
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas: {str(e)}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor"}), 500
+
 # === Manejo de errores ===
 @app.errorhandler(404)
 def not_found(error):
