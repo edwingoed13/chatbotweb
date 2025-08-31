@@ -137,7 +137,21 @@ def clean_old_sessions(max_age_days=30):
 
 # --- Inicializar Flask ---
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["https://incalake.com", "https://www.incalake.com", "http://localhost:3000", "http://127.0.0.1:5000"]}})
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "https://incalake.com", 
+            "https://www.incalake.com", 
+            "http://localhost:3000", 
+            "http://127.0.0.1:5000",
+            "http://localhost",
+            "https://localhost"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "Accept"],
+        "supports_credentials": True
+    }
+})
 
 # Configurar Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -568,8 +582,25 @@ def construir_historial_gemini(historial_previo, instruccion_principal, contexto
     
     return historial_para_gemini
 
+# === Manejo de CORS adicional ===
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = jsonify({'status': 'OK'})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "*")
+        response.headers.add('Access-Control-Allow-Methods', "*")
+        return response
+
+@app.after_request
+def after_request(response):
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,Accept")
+    response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+    return response
+
 # === Endpoints de la API ===
-@app.route('/register_user', methods=['POST'])
+@app.route('/register_user', methods=['POST', 'OPTIONS'])
 def register_user():
     try:
         data = request.get_json()
@@ -634,7 +665,7 @@ def register_user():
         logger.error(f"Error en register_user: {str(e)}", exc_info=True)
         return jsonify({"error": "Error interno del servidor"}), 500
 
-@app.route('/chat', methods=['POST'])
+@app.route('/chat', methods=['POST', 'OPTIONS'])
 def chat():
     try:
         data = request.get_json()
@@ -719,7 +750,7 @@ def chat():
         logger.error(f"Error en endpoint /chat: {str(e)}", exc_info=True)
         return jsonify({"error": "Error interno del servidor"}), 500
 
-@app.route('/session/<session_id>/history', methods=['GET'])
+@app.route('/session/<session_id>/history', methods=['GET', 'OPTIONS'])
 def get_session_history(session_id):
     try:
         # Verificar si la sesión existe
@@ -740,7 +771,7 @@ def get_session_history(session_id):
         logger.error(f"Error obteniendo historial: {str(e)}", exc_info=True)
         return jsonify({"error": "Error interno del servidor"}), 500
 
-@app.route('/session/<session_id>/clear', methods=['POST'])
+@app.route('/session/<session_id>/clear', methods=['POST', 'OPTIONS'])
 def clear_session_endpoint(session_id):
     try:
         if not clear_session(session_id):
@@ -754,7 +785,7 @@ def clear_session_endpoint(session_id):
         logger.error(f"Error limpiando sesión: {str(e)}", exc_info=True)
         return jsonify({"error": "Error interno del servidor"}), 500
 
-@app.route('/destinations', methods=['GET'])
+@app.route('/destinations', methods=['GET', 'OPTIONS'])
 def get_destinations():
     """
     Obtiene la lista de destinos disponibles con conteo de tours.
@@ -775,7 +806,7 @@ def get_destinations():
         logger.error(f"Error obteniendo destinos: {str(e)}", exc_info=True)
         return jsonify({"error": "Error interno del servidor"}), 500
 
-@app.route('/health', methods=['GET'])
+@app.route('/health', methods=['GET', 'OPTIONS'])
 def health_check():
     """
     Endpoint de health check para monitoreo.
@@ -814,7 +845,7 @@ def health_check():
             "error": str(e)
         }), 503
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['GET', 'OPTIONS'])
 def root():
     """Endpoint raíz para verificar que la API está funcionando."""
     return jsonify({
