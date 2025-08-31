@@ -568,13 +568,34 @@ def construir_historial_gemini(historial_previo, instruccion_principal, contexto
     
     return historial_para_gemini
 
-# === CORS configurado únicamente via Flask-CORS ===
+# === Manejo de CORS y preflight ===
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = jsonify({'status': 'OK'})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,Accept")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+        return response, 200  # Importante: devolver status 200
 
 # === Endpoints de la API ===
 @app.route('/register_user', methods=['POST', 'OPTIONS'])
 def register_user():
     try:
-        data = request.get_json()
+        # Intentar obtener datos JSON, si no funciona, intentar form data
+        data = None
+        if request.is_json:
+            data = request.get_json()
+        elif request.form:
+            # Convertir form data a diccionario
+            data = request.form.to_dict()
+        elif request.data:
+            # Intentar parsear datos raw como JSON
+            try:
+                data = json.loads(request.data.decode('utf-8'))
+            except:
+                pass
+        
         if not data:
             return jsonify({"error": "No se proporcionaron datos"}), 400
         
@@ -639,7 +660,18 @@ def register_user():
 @app.route('/chat', methods=['POST', 'OPTIONS'])
 def chat():
     try:
-        data = request.get_json()
+        # Intentar obtener datos JSON, si no funciona, intentar form data
+        data = None
+        if request.is_json:
+            data = request.get_json()
+        elif request.form:
+            data = request.form.to_dict()
+        elif request.data:
+            try:
+                data = json.loads(request.data.decode('utf-8'))
+            except:
+                pass
+        
         if not data:
             return jsonify({"error": "No se proporcionaron datos"}), 400
             
