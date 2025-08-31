@@ -137,21 +137,7 @@ def clean_old_sessions(max_age_days=30):
 
 # --- Inicializar Flask ---
 app = Flask(__name__)
-CORS(app, resources={
-    r"/*": {
-        "origins": [
-            "https://incalake.com", 
-            "https://www.incalake.com", 
-            "http://localhost:3000", 
-            "http://127.0.0.1:5000",
-            "http://localhost",
-            "https://localhost"
-        ],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "Accept"],
-        "supports_credentials": True
-    }
-})
+CORS(app, origins="*", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 # Configurar Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -582,22 +568,7 @@ def construir_historial_gemini(historial_previo, instruccion_principal, contexto
     
     return historial_para_gemini
 
-# === Manejo de CORS adicional ===
-@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        response = jsonify({'status': 'OK'})
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        response.headers.add('Access-Control-Allow-Headers', "*")
-        response.headers.add('Access-Control-Allow-Methods', "*")
-        return response
-
-@app.after_request
-def after_request(response):
-    response.headers.add("Access-Control-Allow-Origin", "*")
-    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,Accept")
-    response.headers.add("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
-    return response
+# === CORS configurado únicamente via Flask-CORS ===
 
 # === Endpoints de la API ===
 @app.route('/register_user', methods=['POST', 'OPTIONS'])
